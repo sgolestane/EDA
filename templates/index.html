@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Insights Analyzer</title>
+    <style>
+        .query {
+            display: none;
+        }
+        .toggle-icon {
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+        }
+        section {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        section p {
+            margin: 5px 0;
+        }
+        section div {
+        }
+    </style>
+</head>
+<body>
+<h2>Analyze Data from SQLite</h2>
+<label for="tableSelect">Select Table:</label>
+<select id="tableSelect">
+    <!-- Options will be populated dynamically -->
+</select>
+<button id="analyzeButton">Run Analysis</button>
+<h3>Upload CSV File:</h3>
+<input type="file" id="csvFileInput" accept=".csv">
+<button id="uploadButton">Upload CSV</button>
+<h3>Insights:</h3>
+<div id="insights"></div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/tables')
+            .then(response => response.json())
+            .then(data => {
+                const tableSelect = document.getElementById('tableSelect');
+                data.tables.forEach(table => {
+                    const option = document.createElement('option');
+                    option.value = table;
+                    option.innerText = table;
+                    tableSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+    document.getElementById('analyzeButton').addEventListener('click', function() {
+        const selectedTable = document.getElementById('tableSelect').value;
+        fetch('/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ table: selectedTable })
+        })
+            .then(response => response.json())
+            .then(data => {
+                const insightsContainer = document.getElementById("insights");
+                insightsContainer.innerHTML = "";
+                if (data.insights) {
+                    data.insights.forEach(insight => {
+                        const section = document.createElement("section");
+                        const questionParagraph = document.createElement("p");
+                        questionParagraph.innerHTML = `<strong>Question:</strong> ${insight.question}`;
+
+                        const queryDiv = document.createElement("div");
+                        queryDiv.className = "query";
+                        queryDiv.innerHTML = `<strong>Query:</strong> ${insight.query}`;
+
+                        const toggleIcon = document.createElement("span");
+                        toggleIcon.className = "toggle-icon";
+                        toggleIcon.innerText = "Show Query";
+                        toggleIcon.addEventListener('click', function() {
+                            if (queryDiv.style.display === "none") {
+                                queryDiv.style.display = "block";
+                                toggleIcon.innerText = "Hide Query";
+                            } else {
+                                queryDiv.style.display = "none";
+                                toggleIcon.innerText = "Show Query";
+                            }
+                        });
+
+                        const resultDiv = document.createElement("div");
+
+                        if (Array.isArray(insight.result) && Array.isArray(insight.result[0])) {
+                            const table = document.createElement("table");
+                            table.style.borderCollapse = "collapse";
+                            table.style.width = "100%";
+
+                            // Create header row
+                            const headerRow = document.createElement("tr");
+                            insight.columns.forEach(column => {
+                                const th = document.createElement("th");
+                                th.style.border = "1px solid #ccc";
+                                th.style.padding = "8px";
+                                th.innerText = column;
+                                headerRow.appendChild(th);
+                            });
+                            table.appendChild(headerRow);
+
+                            // Create data rows
+                            insight.result.forEach(row => {
+                                const tr = document.createElement("tr");
+                                row.forEach(cell => {
+                                    const td = document.createElement("td");
+                                    td.style.border = "1px solid #ccc";
+                                    td.style.padding = "8px";
+                                    td.innerText = cell;
+                                    tr.appendChild(td);
+                                });
+                                table.appendChild(tr);
+                            });
+
+                            resultDiv.appendChild(table);
+                        } else {
+                            resultDiv.innerHTML = `<strong>Result:</strong> ${insight.result}`;
+                        }
+
+                        section.appendChild(questionParagraph);
+                        section.appendChild(resultDiv);
+                        section.appendChild(toggleIcon);
+                        section.appendChild(queryDiv);
+                        insightsContainer.appendChild(section);
+                    });
+                } else {
+                    insightsContainer.innerHTML = "<div>Error retrieving insights.</div>";
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+    document.getElementById('uploadButton').addEventListener('click', function() {
+        const fileInput = document.getElementById('csvFileInput');
+        const file = fileInput.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload_csv', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('CSV file uploaded and table created successfully.');
+                        location.reload();
+                    } else {
+                        alert('Error uploading CSV file.');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        } else {
+            alert('Please select a CSV file to upload.');
+        }
+    });
+</script>
+</body>
+</html>
