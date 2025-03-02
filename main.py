@@ -57,8 +57,6 @@ class QUIS:
     def __init__(self, db_path, table_name):
         self.db_path = db_path
         self.table_name = table_name
-        self.questions = []
-        self.sql_queries = {}
         logging.info("QUIS instance created using %s database: %s, Table: %s", DATABASE_DIALECT, self.db_path, self.table_name)
 
         if DATABASE_DIALECT == 'sqlite3':
@@ -101,15 +99,17 @@ class QUIS:
                       {"role": "user", "content": prompt}]
         )
 
-        self.questions = [q for q in response.choices[0].message.content.split("\n") if q][:QUESTION_LIMIT]
-        logging.info("Generated %d questions using OpenAI.", len(self.questions))
+        questions = [q for q in response.choices[0].message.content.split("\n") if q][:QUESTION_LIMIT]
+        logging.info("Generated %d questions using OpenAI.", len(questions))
+        return questions
 
-    def generate_sql_queries(self):
+    def generate_sql_queries(self, questions):
         """Uses OpenAI's GPT-4 to generate SQL queries based on the questions."""
         logging.info("Generating SQL queries using OpenAI.")
+        sql_queries = {}
 
         openai_client = openai.Client()
-        for question in self.questions:
+        for question in questions:
             if not question.strip():
                 logging.info("Skipping empty question.")
                 continue
@@ -141,10 +141,11 @@ class QUIS:
             query = query.replace("```", "").strip()
             logging.info("Generated Query: [%s]", query)
 
-            self.sql_queries[question] = query
-        logging.info("Generated %d SQL queries.", len(self.sql_queries))
+            sql_queries[question] = query
+        logging.info("Generated %d SQL queries.", len(sql_queries))
+        return sql_queries
 
-    def execute_queries(self):
+    def execute_queries(self, sql_queries):
         """Executes the generated SQL queries on the database."""
         insights = []
         logging.info("Executing generated SQL queries.")
@@ -155,7 +156,7 @@ class QUIS:
                 extension_path = os.path.dirname(os.path.abspath(__file__))
                 conn.load_extension(os.path.join(extension_path, "stats2.dylib"))
                 cursor = conn.cursor()
-                for question, query in self.sql_queries.items():
+                for question, query in sql_queries.items():
                     try:
                         cursor.execute(query)
                         columns = [description[0] for description in cursor.description]
@@ -167,7 +168,7 @@ class QUIS:
         elif DATABASE_DIALECT == 'postgresql':
             with psycopg2.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                for question, query in self.sql_queries.items():
+                for question, query in sql_queries.items():
                     try:
                         cursor.execute(query)
                         columns = [desc[0] for desc in cursor.description]
@@ -183,9 +184,9 @@ class QUIS:
 
     def run(self):
         logging.info("Starting QUIS analysis.")
-        self.generate_questions()
-        self.generate_sql_queries()
-        insights = self.execute_queries()
+        questions = self.generate_questions()
+        sql_queries = self.generate_sql_queries(questions)
+        insights = self.execute_queries(sql_queries)
         logging.info("Analysis complete.")
         return insights
 
