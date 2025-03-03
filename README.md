@@ -30,7 +30,6 @@ The Data Insights Analyzer is a web application designed to facilitate explorato
 ## Usage
 1. Start the Flask application:
     ```sh
-    # How to run
    uv run main.py --database_dialect postgresql --database "postgresql://localhost/eda"
     ```
 
